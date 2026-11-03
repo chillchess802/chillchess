@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chill Chess | Sunday Morning Winter Chess in South Burlington, VT</title>
+    <meta
+      name="description"
+      content="Sunday morning chess to break up the winter. Low-stress, friendly games from November through March at the South Burlington Public Library."
+    />
+    <link rel="icon" href="favicon.ico" sizes="any" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Roboto+Slab:wght@700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="winter-backdrop" aria-hidden="true">
+      <div class="glow glow-top"></div>
+      <div class="glow glow-bottom"></div>
+    </div>
+
+    <div class="page-wrapper">
+      <!-- 1. Header / Hero -->
+      <header class="hero">
+        <div class="logo-container">
+          <img src="logo.png" alt="Chill Chess Logo" class="hero-logo">
+        </div>
+        <h1 class="hero-title">Chill Chess</h1>
+        <p class="hero-tagline">
+          Sunday morning chess to break up the winter. Low-stress, friendly games from November through March.
+        </p>
+        <div class="logistics-pill" role="region" aria-label="Club Schedule Summary">
+          <span class="pill-item">Sundays</span>
+          <span class="pill-dot" aria-hidden="true">&bull;</span>
+          <span class="pill-item">10:00 AM &ndash; 12:00 PM</span>
+          <span class="pill-dot" aria-hidden="true">&bull;</span>
+          <span class="pill-item">South Burlington Public Library</span>
+          <span class="pill-badge">Free &amp; Open to All</span>
+        </div>
+      </header>
+
+      <main class="main-content">
+        <!-- 2. Dynamic Next Meetup Card -->
+        <section class="meetup-section" aria-labelledby="next-meetup-heading">
+          <div class="glass-card meetup-card">
+            <div class="meetup-status-row">
+              <span class="status-indicator">
+                <span class="status-dot"></span>
+                <span id="season-status-label">Upcoming Session</span>
+              </span>
+              <span class="season-tag">Winter Season</span>
+            </div>
+
+            <h2 id="next-meetup-heading" class="meetup-header">
+              Next Meetup: <span id="next-meetup-date" class="highlight-ice">Sunday, ...</span> &bull;
+              <span id="next-meetup-time">10:00 AM &ndash; 12:00 PM</span>
+            </h2>
+
+            <p class="meetup-venue">
+              <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+              <span>
+                <strong>South Burlington Public Library</strong> (180 Market Street, South Burlington, VT)
+              </span>
+            </p>
+
+            <div class="meetup-actions">
+              <a
+                id="add-to-calendar-btn"
+                href="https://calendar.google.com/calendar/embed?src=chillchess802%40gmail.com&ctz=America%2FNew_York"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="btn btn-primary"
+              >
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="16" y1="2" x2="16" y2="6"></line>
+                  <line x1="8" y1="2" x2="8" y2="6"></line>
+                  <line x1="3" y1="10" x2="21" y2="10"></line>
+                  <line x1="12" y1="14" x2="12" y2="18"></line>
+                  <line x1="10" y1="16" x2="14" y2="16"></line>
+                </svg>
+                Add to Calendar
+              </a>
+              <a
+                href="https://calendar.google.com/calendar/embed?src=chillchess802%40gmail.com&ctz=America%2FNew_York"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="btn btn-secondary"
+              >
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="16" y1="2" x2="16" y2="6"></line>
+                  <line x1="8" y1="2" x2="8" y2="6"></line>
+                  <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+                View Full Season Calendar
+              </a>
+            </div>
+          </div>
+
+          <!-- Dynamic Footnote Container directly beneath the card -->
+          <div id="skipped-sunday-footnote" class="meetup-footnote" hidden aria-live="polite">
+            <p class="footnote-text">
+              <em>*Note: There will be no meeting on Sunday, <span id="skipped-sunday-date"></span>.</em>
+            </p>
+          </div>
+        </section>
+
+        <!-- 3. Mailing List Section -->
+        <section class="mailing-section" aria-labelledby="mailing-heading">
+          <div class="glass-card mailing-card">
+            <div class="mailing-content">
+              <h2 id="mailing-heading" class="section-title">Stay in the Loop</h2>
+              <p class="mailing-description">
+                Get email reminders of upcoming Sunday meetings, holiday schedule notes, and other club events.
+              </p>
+            </div>
+            <div class="mailing-action">
+              <a
+                href="mailto:chillchess802@gmail.com?subject=Join%20 the%20Chill%20Chess%20Mailing%20List&body=Hi%20Chill%20Chess%2C%0A%0APlease%20add%20me%20to%20the%20Sunday%20morning%20chess%20mailing%20list!"
+                class="btn btn-ice btn-large"
+              >
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                  <polyline points="22,6 12,13 2,6"></polyline>
+                </svg>
+                Join the Mailing List
+              </a>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. "What to Expect" / Club Vibe Section -->
+        <section class="vibe-section" aria-labelledby="vibe-heading">
+          <div class="section-header">
+            <h2 id="vibe-heading" class="section-title">What to Expect</h2>
+            <p class="section-subtitle">Friendly over-the-board games in a cozy library setting.</p>
+          </div>
+
+          <div class="vibe-grid">
+            <article class="glass-card vibe-card">
+              <div class="card-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+                  <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+                  <line x1="6" y1="1" x2="6" y2="4"></line>
+                  <line x1="10" y1="1" x2="10" y2="4"></line>
+                  <line x1="14" y1="1" x2="14" y2="4"></line>
+                </svg>
+              </div>
+              <h3 class="card-title">Casual &amp; Low-Stress</h3>
+              <p class="card-text">
+                No ratings, no tournament pressure, relaxed untimed or friendly rapid games.
+              </p>
+            </article>
+
+            <article class="glass-card vibe-card">
+              <div class="card-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="2" x2="12" y2="22"></line>
+                  <path d="M20 16l-4-4 4-4"></path>
+                  <path d="M4 8l4 4-4 4"></path>
+                  <path d="M16 4l-4 4-4-4"></path>
+                  <path d="M8 20l4-4 4 4"></path>
+                </svg>
+              </div>
+              <h3 class="card-title">An Excuse to Get Out</h3>
+              <p class="card-text">
+                A warm Sunday morning ritual to beat cabin fever during Vermont winters.
+              </p>
+            </article>
+
+            <article class="glass-card vibe-card">
+              <div class="card-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+              </div>
+              <h3 class="card-title">All Skill Levels Welcome</h3>
+              <p class="card-text">
+                From seasoned players to those who haven&rsquo;t played across an actual board in years. As long as you
+                know the basic rules of the game, you&rsquo;re welcome to play.
+              </p>
+            </article>
+
+            <article class="glass-card vibe-card">
+              <div class="card-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+              </div>
+              <h3 class="card-title">Drop-In Friendly</h3>
+              <p class="card-text">
+                10:00 AM to 12:00 PM. Drop in for 30 minutes or stay the whole two hours.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <!-- 5. Logistics & FAQ -->
+        <section class="logistics-section" aria-labelledby="logistics-heading">
+          <div class="section-header">
+            <h2 id="logistics-heading" class="section-title">Logistics &amp; FAQ</h2>
+            <p class="section-subtitle">Everything you need to know before dropping by.</p>
+          </div>
+
+          <div class="glass-card logistics-card">
+            <dl class="faq-list">
+              <div class="faq-item">
+                <dt class="faq-term">
+                  <span class="faq-bullet" aria-hidden="true">&#9816;</span>
+                  Cost &amp; Registration
+                </dt>
+                <dd class="faq-detail">
+                  <strong>Free to attend.</strong> No membership fees or advance sign-up required&mdash;just show up ready
+                  for a friendly game.
+                </dd>
+              </div>
+
+              <div class="faq-item">
+                <dt class="faq-term">
+                  <span class="faq-bullet" aria-hidden="true">&#9814;</span>
+                  Where Inside the Library?
+                </dt>
+                <dd class="faq-detail">
+                  Meets in the library&rsquo;s designated community/quiet room at <strong>180 Market Street</strong>.
+                </dd>
+              </div>
+
+              <div class="faq-item">
+                <dt class="faq-term">
+                  <span class="faq-bullet" aria-hidden="true">&#9815;</span>
+                  Equipment
+                </dt>
+                <dd class="faq-detail">
+                  Boards and sets provided (or bring your favorite set and clock if you like).
+                </dd>
+              </div>
+
+              <div class="faq-item">
+                <dt class="faq-term">
+                  <span class="faq-bullet" aria-hidden="true">&#9813;</span>
+                  Winter Weather Policy
+                </dt>
+                <dd class="faq-detail">
+                  Follows South Burlington Public Library operating status&mdash;if the library closes for severe winter
+                  weather, chess is off.
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </section>
+      </main>
+
+      <!-- 6. Footer -->
+      <footer class="site-footer">
+        <div class="footer-links">
+          <a href="mailto:chillchess802@gmail.com" class="footer-link">Contact Organizer</a>
+          <span class="footer-divider" aria-hidden="true">&bull;</span>
+          <a
+            href="https://calendar.google.com/calendar/embed?src=chillchess802%40gmail.com&ctz=America%2FNew_York"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="footer-link"
+          >
+            Public Season Calendar
+          </a>
+        </div>
+        <p class="footer-season">Chill Chess &bull; Weekly November through March</p>
+      </footer>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
