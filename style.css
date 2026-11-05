@@ -57,14 +57,36 @@ html {
 
 body {
   background-color: var(--bg-slate);
-  background-image:
-    radial-gradient(circle at 50% 10%, #0c2447 0%, #071a35 55%, #041328 100%);
+  background-image: radial-gradient(circle at 50% 10%, #0c2447 0%, #071a35 55%, #041328 100%);
   color: var(--text-light);
   font-family: var(--font-sans);
   line-height: 1.6;
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
+}
+
+/* Base Inline Links */
+a {
+  color: var(--ice-200);
+  text-decoration: underline;
+  text-decoration-color: rgba(142, 200, 246, 0.45);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1.5px;
+  transition:
+    color 0.15s ease,
+    text-decoration-color 0.15s ease;
+}
+
+a:hover {
+  color: var(--text-white);
+  text-decoration-color: var(--ice-300);
+}
+
+a:focus-visible {
+  outline: 2px solid var(--ice-200);
+  outline-offset: 2px;
+  border-radius: 3px;
 }
 
 /* Subtle Winter Ambient Backdrop */
@@ -168,23 +190,6 @@ body {
   color: var(--ice-300);
 }
 
-.hero-title {
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: clamp(2.5rem, 6vw, 3.6rem);
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-  color: var(--text-white);
-  text-shadow: 0 3px 16px rgba(10, 16, 22, 0.35);
-}
-
-.hero-tagline {
-  max-width: 580px;
-  font-size: clamp(1.05rem, 2.2vw, 1.2rem);
-  color: var(--text-light);
-  font-weight: 400;
-}
-
 .logistics-pill {
   margin-top: 0.5rem;
   display: inline-flex;
@@ -265,8 +270,7 @@ body {
 .meetup-card {
   padding: 2rem 2.25rem;
   border-color: var(--border-frost-strong);
-  background:
-    linear-gradient(135deg, rgba(142, 200, 246, 0.12) 0%, rgba(10, 28, 56, 0.72) 100%);
+  background: linear-gradient(135deg, rgba(142, 200, 246, 0.12) 0%, rgba(10, 28, 56, 0.72) 100%);
   position: relative;
   overflow: hidden;
 }
@@ -333,13 +337,21 @@ body {
   color: var(--ice-200);
 }
 
-.meetup-venue {
-  display: inline-flex;
+.meetup-venue,
+.meetup-subscribe {
+  display: flex;
   align-items: center;
   gap: 0.5rem;
   color: var(--text-light);
-  font-size: 1rem;
-  margin-bottom: 1.5rem;
+  font-size: 0.98rem;
+}
+
+.meetup-venue {
+  margin-bottom: 0.55rem;
+}
+
+.meetup-subscribe {
+  margin-bottom: 0;
 }
 
 .meetup-venue strong {
@@ -352,12 +364,6 @@ body {
   height: 18px;
   color: var(--ice-300);
   flex-shrink: 0;
-}
-
-.meetup-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.85rem;
 }
 
 /* Dynamic Skipped-Sunday Footnote */
@@ -419,8 +425,21 @@ body {
 
 .btn-primary:hover {
   background: var(--ice-200);
+  color: var(--bg-slate-deep);
   transform: translateY(-1px);
   box-shadow: 0 6px 20px rgba(142, 200, 246, 0.35);
+}
+
+.btn-sm {
+  padding: 0.42rem 0.85rem;
+  font-size: 0.82rem;
+  border-radius: var(--radius-pill);
+  gap: 0.4rem;
+}
+
+.btn-sm .btn-icon {
+  width: 15px;
+  height: 15px;
 }
 
 .btn-secondary {
@@ -465,8 +484,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 1.5rem;
-  background:
-    linear-gradient(135deg, rgba(10, 28, 56, 0.72) 0%, rgba(142, 200, 246, 0.11) 100%);
+  background: linear-gradient(135deg, rgba(10, 28, 56, 0.72) 0%, rgba(142, 200, 246, 0.11) 100%);
 }
 
 .mailing-content {
