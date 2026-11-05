@@ -333,6 +333,10 @@ a:focus-visible {
   margin-bottom: 0.75rem;
 }
 
+#next-meetup-time {
+  white-space: nowrap;
+}
+
 .highlight-ice {
   color: var(--ice-200);
 }
@@ -686,6 +690,16 @@ a:focus-visible {
   .logistics-pill {
     border-radius: var(--radius-md);
     padding: 0.75rem 1rem;
+  }
+
+  .meetup-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .meetup-divider {
+    display: none;
   }
 }
 
