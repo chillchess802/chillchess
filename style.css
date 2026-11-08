@@ -370,6 +370,39 @@ a:focus-visible {
   flex-shrink: 0;
 }
 
+.meetup-note {
+  margin-top: 1.1rem;
+  padding: 0.75rem 1.05rem;
+  border-radius: var(--radius-md);
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-left: 4px solid #d97706;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: #78350f;
+  font-size: 0.95rem;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+}
+
+.meetup-note-icon {
+  width: 20px;
+  height: 20px;
+  color: #b45309;
+}
+
+.meetup-note--red {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  border-left-color: #dc2626;
+  color: #7f1d1d;
+}
+
+.meetup-note--red .meetup-note-icon {
+  color: #dc2626;
+}
+
 /* Dynamic Skipped-Sunday Footnote */
 .meetup-footnote {
   padding: 0.75rem 1.25rem;

@@ -3,11 +3,18 @@
  *
  * Calculates the next upcoming Sunday session (10:00 AM – 12:00 PM ET),
  * supports skipped/holiday off-week detection with a conditional footnote,
- * and is structured to plug directly into a Google Calendar feed.
+ * and dynamically displays an event note when present on the scheduled Sunday.
  */
 
 const CLUB_CONFIG = {
   calendarId: "chillchess802@gmail.com",
+  /**
+   * Optional Google Calendar API Key (restricted to chillchess.org).
+   * When set (and the calendar's public sharing is set to "See all event details"),
+   * `app.js` automatically fetches upcoming events from Google Calendar to detect
+   * off-weeks and display any event description as the Next Meetup note.
+   */
+  googleCalendarApiKey: "",
   publicCalendarUrl:
     "https://calendar.google.com/calendar/embed?src=chillchess802%40gmail.com&ctz=America%2FNew_York",
   timeZone: "America/New_York",
@@ -17,10 +24,7 @@ const CLUB_CONFIG = {
   venueAddress: "180 Market Street, South Burlington, VT 05403",
 
   /**
-   * Placeholder list of skipped Sundays in YYYY-MM-DD format (e.g., library holiday closures).
-   * When a Google Calendar API or ICS feed is connected, populate or replace this set
-   * with Sundays that have no scheduled "Chill Chess" event.
-   *
+   * List of skipped Sundays in YYYY-MM-DD format (e.g., library holiday closures).
    * Tip: Append `?skipNextSunday=true` to the page URL to preview the off-week footnote state.
    */
   skippedSundays: [
@@ -28,6 +32,16 @@ const CLUB_CONFIG = {
     // "2026-11-29",
     // "2026-12-27",
   ],
+
+  /**
+   * Optional per-date notes in YYYY-MM-DD format.
+   * If a note exists for the upcoming meetup Sunday (either here, via Google Calendar
+   * event description, or via `?note=...` in the URL), the yellow alert banner is shown.
+   */
+  eventNotes: {
+    // Example:
+    // "2026-11-15": "Meeting in the 2nd Floor Community Room this week.",
+  },
 };
 
 /**
@@ -52,6 +66,19 @@ function formatMonthDay(date) {
     month: "long",
     day: "numeric",
   });
+}
+
+/**
+ * Strips any HTML tags from a Google Calendar event description and trims whitespace.
+ * @param {string} rawText
+ * @returns {string}
+ */
+function cleanCalendarNote(rawText) {
+  if (!rawText) {
+    return "";
+  }
+  const doc = new DOMParser().parseFromString(rawText, "text/html");
+  return (doc.body.textContent || "").trim();
 }
 
 /**
@@ -90,42 +117,120 @@ function addWeeks(date, weeks) {
 }
 
 /**
- * Resolves the schedule state for the Next Meetup card.
- * Checks whether the immediate upcoming Sunday is skipped (via config, URL param,
- * or future Google Calendar feed integration) and finds the next active meetup Sunday.
+ * Resolves the schedule state for the Next Meetup card using configured skipped Sundays
+ * and event notes (plus URL query parameters for easy previewing).
  *
  * @param {Date} [now=new Date()]
- * @returns {{ nextMeetupDate: Date, skippedSundayDate: Date | null }}
+ * @param {Set<string>} [customSkippedSet]
+ * @param {Record<string, string>} [customNotesMap]
+ * @returns {{ nextMeetupDate: Date, skippedSundayDate: Date | null, meetupNote: string }}
  */
-function resolveScheduleState(now = new Date()) {
+function resolveScheduleState(
+  now = new Date(),
+  customSkippedSet = new Set(CLUB_CONFIG.skippedSundays),
+  customNotesMap = CLUB_CONFIG.eventNotes,
+) {
   const immediateSunday = getImmediateUpcomingSunday(now);
-  const skippedSet = new Set(CLUB_CONFIG.skippedSundays);
-
-  // Support `?skipNextSunday=true` query parameter to easily preview the off-week footnote
+  const skippedSet = new Set(customSkippedSet);
   const urlParams = new URLSearchParams(window.location.search);
+
+  // Support `?skipNextSunday=true` query parameter to preview the off-week footnote
   if (urlParams.get("skipNextSunday") === "true") {
     skippedSet.add(toIsoDateString(immediateSunday));
   }
 
-  if (!skippedSet.has(toIsoDateString(immediateSunday))) {
-    return {
-      nextMeetupDate: immediateSunday,
-      skippedSundayDate: null,
-    };
+  let nextMeetupDate = immediateSunday;
+  let skippedSundayDate = null;
+
+  if (skippedSet.has(toIsoDateString(immediateSunday))) {
+    skippedSundayDate = immediateSunday;
+    let candidateSunday = addWeeks(immediateSunday, 1);
+    let safetyCounter = 0;
+    while (skippedSet.has(toIsoDateString(candidateSunday)) && safetyCounter < 12) {
+      candidateSunday = addWeeks(candidateSunday, 1);
+      safetyCounter += 1;
+    }
+    nextMeetupDate = candidateSunday;
   }
 
-  // Advance week-by-week until the next non-skipped Sunday is found
-  let candidateSunday = addWeeks(immediateSunday, 1);
-  let safetyCounter = 0;
-  while (skippedSet.has(toIsoDateString(candidateSunday)) && safetyCounter < 12) {
-    candidateSunday = addWeeks(candidateSunday, 1);
-    safetyCounter += 1;
-  }
+  const nextMeetupIso = toIsoDateString(nextMeetupDate);
+  const urlNote = urlParams.get("note");
+  const configuredNote = customNotesMap && customNotesMap[nextMeetupIso] ? customNotesMap[nextMeetupIso] : "";
+  const meetupNote = cleanCalendarNote(urlNote !== null ? urlNote : configuredNote);
 
   return {
-    nextMeetupDate: candidateSunday,
-    skippedSundayDate: immediateSunday,
+    nextMeetupDate,
+    skippedSundayDate,
+    meetupNote,
   };
+}
+
+/**
+ * Fetches upcoming Sunday events from Google Calendar API v3 when `googleCalendarApiKey` is set.
+ * Extracts any event description as the note for that Sunday and detects skipped Sundays.
+ *
+ * @param {Date} [now=new Date()]
+ * @returns {Promise<{ skippedSet: Set<string>, notesMap: Record<string, string> } | null>}
+ */
+async function fetchGoogleCalendarSchedule(now = new Date()) {
+  if (!CLUB_CONFIG.googleCalendarApiKey) {
+    return null;
+  }
+
+  const immediateSunday = getImmediateUpcomingSunday(now);
+  const timeMin = new Date(immediateSunday.getTime());
+  timeMin.setHours(0, 0, 0, 0);
+
+  const timeMax = addWeeks(timeMin, 8);
+  timeMax.setHours(23, 59, 59, 999);
+
+  const encodedCalId = encodeURIComponent(CLUB_CONFIG.calendarId);
+  const params = new URLSearchParams({
+    key: CLUB_CONFIG.googleCalendarApiKey,
+    singleEvents: "true",
+    orderBy: "startTime",
+    timeMin: timeMin.toISOString(),
+    timeMax: timeMax.toISOString(),
+  });
+
+  const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodedCalId}/events?${params}`);
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = await response.json();
+  const activeSundays = new Set();
+  const notesMap = { ...CLUB_CONFIG.eventNotes };
+
+  for (const item of data.items || []) {
+    if (item.status === "cancelled") {
+      continue;
+    }
+    const startRaw = item.start && (item.start.dateTime || item.start.date);
+    if (!startRaw) {
+      continue;
+    }
+    const eventDate = new Date(startRaw);
+    const dateKey = toIsoDateString(eventDate);
+    activeSundays.add(dateKey);
+
+    if (item.description) {
+      const note = cleanCalendarNote(item.description);
+      if (note) {
+        notesMap[dateKey] = note;
+      }
+    }
+  }
+
+  const skippedSet = new Set(CLUB_CONFIG.skippedSundays);
+  for (let w = 0; w < 8; w += 1) {
+    const sundayKey = toIsoDateString(addWeeks(immediateSunday, w));
+    if (!activeSundays.has(sundayKey)) {
+      skippedSet.add(sundayKey);
+    }
+  }
+
+  return { skippedSet, notesMap };
 }
 
 /**
@@ -152,19 +257,22 @@ function buildGoogleCalendarEventUrl(meetupDate) {
 }
 
 /**
- * Renders the resolved schedule state into the Next Meetup card and conditional footnote.
+ * Applies the resolved schedule state to the DOM.
+ * @param {{ nextMeetupDate: Date, skippedSundayDate: Date | null, meetupNote: string }} state
  */
-function renderMeetupSchedule() {
+function applyScheduleStateToDom(state) {
   const nextMeetupDateEl = document.getElementById("next-meetup-date");
   const footnoteContainerEl = document.getElementById("skipped-sunday-footnote");
   const skippedSundayDateEl = document.getElementById("skipped-sunday-date");
   const addToCalendarBtn = document.getElementById("add-to-calendar-btn");
+  const meetupNoteEl = document.getElementById("meetup-note");
+  const meetupNoteTextEl = document.getElementById("meetup-note-text");
 
   if (!nextMeetupDateEl) {
     return;
   }
 
-  const { nextMeetupDate, skippedSundayDate } = resolveScheduleState();
+  const { nextMeetupDate, skippedSundayDate, meetupNote } = state;
 
   // Update Primary Header Date: "Sunday, [Date]"
   nextMeetupDateEl.textContent = `Sunday, ${formatMonthDay(nextMeetupDate)}`;
@@ -172,6 +280,17 @@ function renderMeetupSchedule() {
   // Update "Add to Calendar" button for the upcoming meetup date
   if (addToCalendarBtn) {
     addToCalendarBtn.href = buildGoogleCalendarEventUrl(nextMeetupDate);
+  }
+
+  // Toggle the Dynamic Event Note Banner when a note is present for this meetup
+  if (meetupNoteEl && meetupNoteTextEl) {
+    if (meetupNote) {
+      meetupNoteTextEl.textContent = meetupNote;
+      meetupNoteEl.hidden = false;
+    } else {
+      meetupNoteTextEl.textContent = "";
+      meetupNoteEl.hidden = true;
+    }
   }
 
   // Toggle the Dynamic Footnote Container when an off-week is detected
@@ -187,7 +306,24 @@ function renderMeetupSchedule() {
 }
 
 /**
- * Provides a clean visual emblem if `logo.png` has not yet been dropped into the root directory.
+ * Renders the schedule state and optionally refreshes from Google Calendar API if configured.
+ */
+async function renderMeetupSchedule() {
+  const now = new Date();
+  applyScheduleStateToDom(resolveScheduleState(now));
+
+  try {
+    const liveSchedule = await fetchGoogleCalendarSchedule(now);
+    if (liveSchedule) {
+      applyScheduleStateToDom(resolveScheduleState(now, liveSchedule.skippedSet, liveSchedule.notesMap));
+    }
+  } catch (err) {
+    console.warn("Could not fetch live Google Calendar feed, using local schedule config:", err);
+  }
+}
+
+/**
+ * Provides a clean visual emblem if the hero image fails to load.
  */
 function initLogoFallback() {
   const logoImg = document.querySelector(".hero-logo");
