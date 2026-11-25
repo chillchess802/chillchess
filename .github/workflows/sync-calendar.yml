@@ -9,21 +9,18 @@ on:
     - cron: "0 */2 * * *"
   workflow_dispatch:
 
-permissions:
-  contents: write
-  pages: write
-  id-token: write
-
 concurrency:
   group: "pages-and-calendar-sync"
   cancel-in-progress: false
 
 jobs:
-  sync-and-deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: write
+      pages: write
+    outputs:
+      should_deploy: ${{ steps.check_changes.outputs.should_deploy }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -51,23 +48,36 @@ jobs:
             git add calendar.ics
             git commit -m "chore: sync calendar.ics from Google Calendar"
             git push
-            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "No changes in calendar.ics, but triggered by ${{ github.event_name }} — deploying Pages"
+            echo "should_deploy=true" >> "$GITHUB_OUTPUT"
           else
-            echo "No changes in calendar.ics"
-            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No changes in calendar.ics during scheduled check — skipping deploy"
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Setup Pages
-        if: github.event_name != 'schedule' || steps.check_changes.outputs.changed == 'true'
+        if: steps.check_changes.outputs.should_deploy == 'true'
         uses: actions/configure-pages@v6
 
       - name: Upload Pages artifact
-        if: github.event_name != 'schedule' || steps.check_changes.outputs.changed == 'true'
+        if: steps.check_changes.outputs.should_deploy == 'true'
         uses: actions/upload-pages-artifact@v5
         with:
           path: "."
 
+  deploy:
+    needs: build
+    if: needs.build.outputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        if: github.event_name != 'schedule' || steps.check_changes.outputs.changed == 'true'
         uses: actions/deploy-pages@v5
