@@ -407,21 +407,6 @@ a:focus-visible {
   color: #dc2626;
 }
 
-/* Dynamic Skipped-Sunday Footnote */
-.meetup-footnote {
-  padding: 0.75rem 1.25rem;
-  border-radius: var(--radius-md);
-  background: rgba(7, 21, 44, 0.72);
-  border: 1px solid rgba(197, 228, 251, 0.22);
-  border-left: 3px solid var(--ice-300);
-  color: var(--ice-100);
-  font-size: 0.94rem;
-}
-
-.footnote-text {
-  margin: 0;
-}
-
 /* ==========================================================================
    Buttons
    ========================================================================== */

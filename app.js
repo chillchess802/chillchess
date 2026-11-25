@@ -341,7 +341,12 @@ function resolveScheduleState(
   const nextMeetupIso = toIsoDateString(nextMeetupDate);
   const urlNote = urlParams.get("note");
   const configuredNote = customNotesMap && customNotesMap[nextMeetupIso] ? customNotesMap[nextMeetupIso] : "";
-  const meetupNote = cleanCalendarNote(urlNote !== null ? urlNote : configuredNote);
+  const calendarEntryNote = cleanCalendarNote(urlNote !== null ? urlNote : configuredNote);
+
+  let meetupNote = calendarEntryNote;
+  if (!meetupNote && skippedSundayDate) {
+    meetupNote = `There will be no meeting on Sunday, ${formatMonthDay(skippedSundayDate)}.`;
+  }
 
   return {
     nextMeetupDate,
@@ -406,8 +411,6 @@ function buildGoogleCalendarEventUrl(meetupDate) {
  */
 function applyScheduleStateToDom(state) {
   const nextMeetupDateEl = document.getElementById("next-meetup-date");
-  const footnoteContainerEl = document.getElementById("skipped-sunday-footnote");
-  const skippedSundayDateEl = document.getElementById("skipped-sunday-date");
   const addToCalendarBtn = document.getElementById("add-to-calendar-btn");
   const meetupNoteEl = document.getElementById("meetup-note");
   const meetupNoteTextEl = document.getElementById("meetup-note-text");
@@ -416,7 +419,7 @@ function applyScheduleStateToDom(state) {
     return;
   }
 
-  const { nextMeetupDate, skippedSundayDate, meetupNote } = state;
+  const { nextMeetupDate, meetupNote } = state;
 
   // Update Primary Header Date: "Sunday, [Date]"
   nextMeetupDateEl.textContent = `Sunday, ${formatMonthDay(nextMeetupDate)}`;
@@ -426,7 +429,7 @@ function applyScheduleStateToDom(state) {
     addToCalendarBtn.href = buildGoogleCalendarEventUrl(nextMeetupDate);
   }
 
-  // Toggle the Dynamic Event Note Banner when a note is present for this meetup
+  // Toggle the Dynamic Event Note Banner when a calendar note or skipped-Sunday notice is present
   if (meetupNoteEl && meetupNoteTextEl) {
     if (meetupNote) {
       meetupNoteTextEl.textContent = meetupNote;
@@ -434,17 +437,6 @@ function applyScheduleStateToDom(state) {
     } else {
       meetupNoteTextEl.textContent = "";
       meetupNoteEl.hidden = true;
-    }
-  }
-
-  // Toggle the Dynamic Footnote Container when an off-week is detected
-  if (footnoteContainerEl && skippedSundayDateEl) {
-    if (skippedSundayDate) {
-      skippedSundayDateEl.textContent = formatMonthDay(skippedSundayDate);
-      footnoteContainerEl.hidden = false;
-    } else {
-      skippedSundayDateEl.textContent = "";
-      footnoteContainerEl.hidden = true;
     }
   }
 }
