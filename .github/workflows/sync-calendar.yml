@@ -1,0 +1,73 @@
+name: Sync Google Calendar & Deploy Pages
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    # Runs every 2 hours
+    - cron: "0 */2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages-and-calendar-sync"
+  cancel-in-progress: false
+
+jobs:
+  sync-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch latest Google Calendar ICS feed
+        run: |
+          curl -fsSL "https://calendar.google.com/calendar/ical/chillchess802%40gmail.com/public/basic.ics" \
+            | tr -d '\r' \
+            | grep -v '^DTSTAMP:' > calendar.ics.tmp
+
+          if grep -q "BEGIN:VCALENDAR" calendar.ics.tmp; then
+            mv calendar.ics.tmp calendar.ics
+          else
+            echo "Invalid ICS response from Google Calendar"
+            rm -f calendar.ics.tmp
+            exit 1
+          fi
+
+      - name: Commit updated calendar.ics if changed
+        id: check_changes
+        run: |
+          if ! git diff --quiet calendar.ics; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add calendar.ics
+            git commit -m "chore: sync calendar.ics from Google Calendar"
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No changes in calendar.ics"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Pages
+        if: github.event_name != 'schedule' || steps.check_changes.outputs.changed == 'true'
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        if: github.event_name != 'schedule' || steps.check_changes.outputs.changed == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "."
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        if: github.event_name != 'schedule' || steps.check_changes.outputs.changed == 'true'
+        uses: actions/deploy-pages@v4

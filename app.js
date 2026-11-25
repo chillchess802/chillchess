@@ -2,18 +2,14 @@
  * Chill Chess — Dynamic Schedule & UI Controller
  *
  * Calculates the next upcoming Sunday session (10:00 AM – 12:00 PM ET),
- * supports skipped/holiday off-week detection with a conditional footnote,
- * and dynamically displays an event note when present on the scheduled Sunday.
+ * parses the synced `calendar.ics` feed (and optional Google Calendar API),
+ * detects skipped/canceled Sundays for the off-week footnote, and displays
+ * any event description as a prominent alert note on the Next Meetup card.
  */
 
 const CLUB_CONFIG = {
   calendarId: "chillchess802@gmail.com",
-  /**
-   * Optional Google Calendar API Key (restricted to chillchess.org).
-   * When set (and the calendar's public sharing is set to "See all event details"),
-   * `app.js` automatically fetches upcoming events from Google Calendar to detect
-   * off-weeks and display any event description as the Next Meetup note.
-   */
+  icsFeedPath: "calendar.ics",
   googleCalendarApiKey: "",
   publicCalendarUrl:
     "https://calendar.google.com/calendar/embed?src=chillchess802%40gmail.com&ctz=America%2FNew_York",
@@ -24,24 +20,16 @@ const CLUB_CONFIG = {
   venueAddress: "180 Market Street, South Burlington, VT 05403",
 
   /**
-   * List of skipped Sundays in YYYY-MM-DD format (e.g., library holiday closures).
+   * Fallback list of skipped Sundays in YYYY-MM-DD format if `calendar.ics` has not loaded yet.
    * Tip: Append `?skipNextSunday=true` to the page URL to preview the off-week footnote state.
    */
-  skippedSundays: [
-    // Example holiday off-weeks:
-    // "2026-11-29",
-    // "2026-12-27",
-  ],
+  skippedSundays: ["2026-11-29", "2026-12-27"],
 
   /**
-   * Optional per-date notes in YYYY-MM-DD format.
-   * If a note exists for the upcoming meetup Sunday (either here, via Google Calendar
-   * event description, or via `?note=...` in the URL), the yellow alert banner is shown.
+   * Optional manual per-date notes in YYYY-MM-DD format (merged with notes parsed from `calendar.ics`).
+   * Tip: Append `?note=Your+note+here` to the page URL to preview the yellow note banner.
    */
-  eventNotes: {
-    // Example:
-    // "2026-11-15": "Meeting in the 2nd Floor Community Room this week.",
-  },
+  eventNotes: {},
 };
 
 /**
@@ -77,8 +65,204 @@ function cleanCalendarNote(rawText) {
   if (!rawText) {
     return "";
   }
-  const doc = new DOMParser().parseFromString(rawText, "text/html");
-  return (doc.body.textContent || "").trim();
+  if (typeof DOMParser !== "undefined") {
+    const doc = new DOMParser().parseFromString(rawText, "text/html");
+    return (doc.body.textContent || "").trim();
+  }
+  return rawText.replace(/<[^>]*>/g, "").trim();
+}
+
+/**
+ * Unescapes RFC 5545 text escapes (\n, \,, \;, \\).
+ * @param {string} val
+ * @returns {string}
+ */
+function unescapeIcsText(val) {
+  return val
+    .replace(/\\n/gi, " ")
+    .replace(/\\,/g, ",")
+    .replace(/\\;/g, ";")
+    .replace(/\\\\/g, "\\");
+}
+
+/**
+ * Parses an ICS date/datetime value (e.g., "20261122T100000" or "20261108T150000Z")
+ * into `{ dateKey: "YYYY-MM-DD", dateObj: Date }`.
+ *
+ * @param {string} rawValue
+ * @returns {{ dateKey: string, dateObj: Date } | null}
+ */
+function parseIcsDateTime(rawValue) {
+  if (!rawValue) {
+    return null;
+  }
+  const val = rawValue.trim();
+  const match = val.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?$/);
+  if (!match) {
+    return null;
+  }
+
+  const [, yearStr, monthStr, dayStr, hourStr, minStr, secStr, isUtc] = match;
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+
+  if (isUtc) {
+    const utcDate = new Date(Date.UTC(year, month - 1, day, Number(hourStr), Number(minStr), Number(secStr)));
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: CLUB_CONFIG.timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(utcDate);
+    const partMap = Object.fromEntries(parts.map((p) => [p.type, p.value]));
+    return {
+      dateKey: `${partMap.year}-${partMap.month}-${partMap.day}`,
+      dateObj: utcDate,
+    };
+  }
+
+  const localDate = new Date(
+    year,
+    month - 1,
+    day,
+    hourStr ? Number(hourStr) : CLUB_CONFIG.startHour,
+    minStr ? Number(minStr) : 0,
+    secStr ? Number(secStr) : 0,
+  );
+  return {
+    dateKey: `${yearStr}-${monthStr}-${dayStr}`,
+    dateObj: localDate,
+  };
+}
+
+/**
+ * Parses an RFC 5545 `.ics` calendar string to extract skipped Sundays (`EXDATE` / cancelled events)
+ * and per-Sunday event notes (`DESCRIPTION`).
+ *
+ * @param {string} icsText
+ * @param {Date} [now=new Date()]
+ * @returns {{ skippedSet: Set<string>, notesMap: Record<string, string> }}
+ */
+function parseIcsSchedule(icsText, now = new Date()) {
+  const unfolded = icsText.replace(/\r?\n[ \t]/g, "");
+  const lines = unfolded.split(/\r?\n/);
+
+  const exdates = new Set();
+  const activeSingleDates = new Set();
+  const recurringSeries = [];
+  const notesMap = { ...CLUB_CONFIG.eventNotes };
+
+  let currentEvent = null;
+
+  for (const line of lines) {
+    if (line === "BEGIN:VEVENT") {
+      currentEvent = { exdates: [] };
+      continue;
+    }
+    if (line === "END:VEVENT") {
+      if (currentEvent) {
+        for (const ex of currentEvent.exdates) {
+          exdates.add(ex);
+        }
+
+        const startInfo = parseIcsDateTime(currentEvent.dtstart);
+        if (startInfo) {
+          if (currentEvent.status === "CANCELLED") {
+            exdates.add(startInfo.dateKey);
+          } else {
+            if (currentEvent.rrule && currentEvent.rrule.includes("FREQ=WEEKLY")) {
+              const untilMatch = currentEvent.rrule.match(/UNTIL=(\d{8}(?:T\d{6}Z?)?)/);
+              const untilInfo = untilMatch ? parseIcsDateTime(untilMatch[1]) : null;
+              recurringSeries.push({
+                startDateKey: startInfo.dateKey,
+                untilDateKey: untilInfo ? untilInfo.dateKey : "2099-12-31",
+                description: currentEvent.description || "",
+              });
+            } else {
+              activeSingleDates.add(startInfo.dateKey);
+            }
+
+            if (currentEvent.description) {
+              const cleaned = cleanCalendarNote(unescapeIcsText(currentEvent.description));
+              if (cleaned) {
+                notesMap[startInfo.dateKey] = cleaned;
+              }
+            }
+          }
+        }
+      }
+      currentEvent = null;
+      continue;
+    }
+
+    if (!currentEvent) {
+      continue;
+    }
+
+    const colonIdx = line.indexOf(":");
+    if (colonIdx === -1) {
+      continue;
+    }
+    const rawKey = line.slice(0, colonIdx);
+    const propName = rawKey.split(";")[0].toUpperCase();
+    const propVal = line.slice(colonIdx + 1);
+
+    if (propName === "DTSTART") {
+      currentEvent.dtstart = propVal;
+    } else if (propName === "DTEND") {
+      currentEvent.dtend = propVal;
+    } else if (propName === "RRULE") {
+      currentEvent.rrule = propVal;
+    } else if (propName === "STATUS") {
+      currentEvent.status = propVal.trim().toUpperCase();
+    } else if (propName === "DESCRIPTION") {
+      currentEvent.description = propVal;
+    } else if (propName === "EXDATE") {
+      for (const part of propVal.split(",")) {
+        const parsedEx = parseIcsDateTime(part);
+        if (parsedEx) {
+          currentEvent.exdates.push(parsedEx.dateKey);
+        }
+      }
+    }
+  }
+
+  // Determine which upcoming Sundays over the next 12 weeks are skipped
+  const skippedSet = new Set(exdates);
+  const immediateSunday = getImmediateUpcomingSunday(now);
+
+  for (let w = 0; w < 12; w += 1) {
+    const sundayKey = toIsoDateString(addWeeks(immediateSunday, w));
+    if (exdates.has(sundayKey)) {
+      skippedSet.add(sundayKey);
+      continue;
+    }
+
+    const coveredBySingle = activeSingleDates.has(sundayKey);
+    const coveredByRecurring = recurringSeries.some(
+      (series) => sundayKey >= series.startDateKey && sundayKey <= series.untilDateKey,
+    );
+
+    if ((activeSingleDates.size > 0 || recurringSeries.length > 0) && !coveredBySingle && !coveredByRecurring) {
+      skippedSet.add(sundayKey);
+    }
+
+    // Apply recurring series note if no single-event override note exists
+    if (!notesMap[sundayKey]) {
+      const seriesWithNote = recurringSeries.find(
+        (series) => sundayKey >= series.startDateKey && sundayKey <= series.untilDateKey && series.description,
+      );
+      if (seriesWithNote) {
+        const cleaned = cleanCalendarNote(unescapeIcsText(seriesWithNote.description));
+        if (cleaned) {
+          notesMap[sundayKey] = cleaned;
+        }
+      }
+    }
+  }
+
+  return { skippedSet, notesMap };
 }
 
 /**
@@ -117,7 +301,7 @@ function addWeeks(date, weeks) {
 }
 
 /**
- * Resolves the schedule state for the Next Meetup card using configured skipped Sundays
+ * Resolves the schedule state for the Next Meetup card using configured or parsed skipped Sundays
  * and event notes (plus URL query parameters for easy previewing).
  *
  * @param {Date} [now=new Date()]
@@ -132,7 +316,8 @@ function resolveScheduleState(
 ) {
   const immediateSunday = getImmediateUpcomingSunday(now);
   const skippedSet = new Set(customSkippedSet);
-  const urlParams = new URLSearchParams(window.location.search);
+  const searchStr = typeof window !== "undefined" && window.location ? window.location.search : "";
+  const urlParams = new URLSearchParams(searchStr);
 
   // Support `?skipNextSunday=true` query parameter to preview the off-week footnote
   if (urlParams.get("skipNextSunday") === "true") {
@@ -166,71 +351,30 @@ function resolveScheduleState(
 }
 
 /**
- * Fetches upcoming Sunday events from Google Calendar API v3 when `googleCalendarApiKey` is set.
- * Extracts any event description as the note for that Sunday and detects skipped Sundays.
+ * Fetches the repository's synced `calendar.ics` file (updated by GitHub Actions).
  *
  * @param {Date} [now=new Date()]
  * @returns {Promise<{ skippedSet: Set<string>, notesMap: Record<string, string> } | null>}
  */
-async function fetchGoogleCalendarSchedule(now = new Date()) {
-  if (!CLUB_CONFIG.googleCalendarApiKey) {
+async function fetchSyncedIcsSchedule(now = new Date()) {
+  if (!CLUB_CONFIG.icsFeedPath) {
     return null;
   }
 
-  const immediateSunday = getImmediateUpcomingSunday(now);
-  const timeMin = new Date(immediateSunday.getTime());
-  timeMin.setHours(0, 0, 0, 0);
-
-  const timeMax = addWeeks(timeMin, 8);
-  timeMax.setHours(23, 59, 59, 999);
-
-  const encodedCalId = encodeURIComponent(CLUB_CONFIG.calendarId);
-  const params = new URLSearchParams({
-    key: CLUB_CONFIG.googleCalendarApiKey,
-    singleEvents: "true",
-    orderBy: "startTime",
-    timeMin: timeMin.toISOString(),
-    timeMax: timeMax.toISOString(),
+  const cacheBuster = Math.floor(Date.now() / 60000); // Bust browser cache every minute
+  const response = await fetch(`${CLUB_CONFIG.icsFeedPath}?v=${cacheBuster}`, {
+    cache: "no-store",
   });
-
-  const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodedCalId}/events?${params}`);
   if (!response.ok) {
     return null;
   }
 
-  const data = await response.json();
-  const activeSundays = new Set();
-  const notesMap = { ...CLUB_CONFIG.eventNotes };
-
-  for (const item of data.items || []) {
-    if (item.status === "cancelled") {
-      continue;
-    }
-    const startRaw = item.start && (item.start.dateTime || item.start.date);
-    if (!startRaw) {
-      continue;
-    }
-    const eventDate = new Date(startRaw);
-    const dateKey = toIsoDateString(eventDate);
-    activeSundays.add(dateKey);
-
-    if (item.description) {
-      const note = cleanCalendarNote(item.description);
-      if (note) {
-        notesMap[dateKey] = note;
-      }
-    }
+  const icsText = await response.text();
+  if (!icsText.includes("BEGIN:VCALENDAR")) {
+    return null;
   }
 
-  const skippedSet = new Set(CLUB_CONFIG.skippedSundays);
-  for (let w = 0; w < 8; w += 1) {
-    const sundayKey = toIsoDateString(addWeeks(immediateSunday, w));
-    if (!activeSundays.has(sundayKey)) {
-      skippedSet.add(sundayKey);
-    }
-  }
-
-  return { skippedSet, notesMap };
+  return parseIcsSchedule(icsText, now);
 }
 
 /**
@@ -306,19 +450,19 @@ function applyScheduleStateToDom(state) {
 }
 
 /**
- * Renders the schedule state and optionally refreshes from Google Calendar API if configured.
+ * Renders the schedule state and refreshes from the synced `calendar.ics` feed.
  */
 async function renderMeetupSchedule() {
   const now = new Date();
   applyScheduleStateToDom(resolveScheduleState(now));
 
   try {
-    const liveSchedule = await fetchGoogleCalendarSchedule(now);
-    if (liveSchedule) {
-      applyScheduleStateToDom(resolveScheduleState(now, liveSchedule.skippedSet, liveSchedule.notesMap));
+    const icsSchedule = await fetchSyncedIcsSchedule(now);
+    if (icsSchedule) {
+      applyScheduleStateToDom(resolveScheduleState(now, icsSchedule.skippedSet, icsSchedule.notesMap));
     }
   } catch (err) {
-    console.warn("Could not fetch live Google Calendar feed, using local schedule config:", err);
+    console.warn("Could not load calendar.ics, using fallback schedule config:", err);
   }
 }
 
@@ -344,7 +488,9 @@ function initLogoFallback() {
   });
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  initLogoFallback();
-  renderMeetupSchedule();
-});
+if (typeof document !== "undefined") {
+  document.addEventListener("DOMContentLoaded", () => {
+    initLogoFallback();
+    renderMeetupSchedule();
+  });
+}
